@@ -1,0 +1,28 @@
+proxmox:
+  host: '192.168.1.100'
+  user: 'root@pam'
+  password: 'strongProxmoxPassword'
+  node: 'pve'
+  storage: 'local'
+
+router_vm_id: 100
+
+router:
+  ip: '192.168.1.1'
+  user: 'root'
+  password: 'strongRouterPassword'
+
+production_port_range:
+  start: 30000
+  end: 40000
+
+decoy_port_range:
+  start: 40001
+  end: 50000
+
+rotation_interval: 3600  # 1 hour in seconds
+recycle_interval: 1800  # 30 minutes in seconds
+adjust_interval: 7200  # 2 hours in seconds
+
+log_file: 'pmc.log'
+log_level: 'INFO'
