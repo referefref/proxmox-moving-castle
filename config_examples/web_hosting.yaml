@@ -1,0 +1,65 @@
+production_services:
+  - name: 'nginx_loadbalancer'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 2048
+    internal_port: 80
+    root_password: 'strongNginxPassword'
+
+  - name: 'web_server_1'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 8080
+    root_password: 'strongWebServer1Password'
+
+  - name: 'web_server_2'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 8080
+    root_password: 'strongWebServer2Password'
+
+  - name: 'database'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 8192
+    internal_port: 3306
+    root_password: 'strongDatabasePassword'
+
+decoy_services:
+  - name: 'decoy_ssh'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 512
+    min_instances: 3
+    max_instances: 7
+    port_range:
+      start: 22000
+      end: 22999
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/auth.log'
+      success_pattern: 'Accepted password for (.+?) from (.+?) port'
+      check_interval: 300
+
+  - name: 'decoy_ftp'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 512
+    min_instances: 2
+    max_instances: 5
+    port_range:
+      start: 21000
+      end: 21999
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/vsftpd.log'
+      success_pattern: 'OK LOGIN: Client "(.+?)"'
+      check_interval: 240
