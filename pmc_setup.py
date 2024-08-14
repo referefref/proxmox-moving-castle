@@ -7,7 +7,7 @@ This script performs the initial setup for the Proxmox Moving Castle system.
 It creates the necessary configuration files, sets up the router VM,
 and prepares the Proxmox environment for the PMC controller.
 
-Usage: python pmc_setup.py [--help]
+Usage: python pmc_setup.py [--help] [--non-interactive]
 """
 
 import subprocess
@@ -85,7 +85,10 @@ def create_config_file():
                 'end': int(input("Enter end of decoy port range: "))
             },
             'rotation_interval': int(input("Enter rotation interval in seconds: ")),
-            'recycle_interval': int(input("Enter recycle interval in seconds: "))
+            'recycle_interval': int(input("Enter recycle interval in seconds: ")),
+            'adjust_interval': int(input("Enter adjust interval in seconds: ")),
+            'log_file': input("Enter log file path (default is 'pmc.log'): ") or 'pmc.log',
+            'log_level': input("Enter log level (INFO, WARNING, ERROR, DEBUG): ") or 'INFO'
         }
 
         with open('pmc_config.yaml', 'w') as f:
@@ -260,7 +263,7 @@ def main():
 
     logger.info("Starting ProxmoxMovingCastle setup...")
 
-    if args.non_interactive:
+    if args.non-interactive:
         try:
             with open('pmc_config.yaml', 'r') as f:
                 config = yaml.safe_load(f)
