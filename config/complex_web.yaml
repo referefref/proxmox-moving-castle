@@ -1,0 +1,65 @@
+production_services:
+  - name: 'web_server'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 2048
+    internal_port: 80
+    root_password: 'strongWebServerPassword'
+
+  - name: 'database'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 3306
+    root_password: 'strongDatabasePassword'
+
+decoy_services:
+  - name: 'decoy_ssh'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 512
+    min_instances: 2
+    max_instances: 5
+    port_range:
+      start: 22000
+      end: 22999
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/auth.log'
+      success_pattern: 'Accepted password for (.+?) from (.+?) port'
+      check_interval: 300  # 5 minutes in seconds
+
+  - name: 'decoy_ftp'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 512
+    min_instances: 1
+    max_instances: 3
+    port_range:
+      start: 21000
+      end: 21999
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/vsftpd.log'
+      success_pattern: 'OK LOGIN: Client "(.+?)"'
+      check_interval: 240  # 4 minutes in seconds
+
+  - name: 'decoy_web'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 1
+    memory: 1024
+    min_instances: 2
+    max_instances: 4
+    port_range:
+      start: 8000
+      end: 8999
+    root_password: 'weakDecoyPassword3'
+    log_monitoring:
+      log_file: '/var/log/apache2/access.log'
+      success_pattern: 'POST /wp-login.php'
+      check_interval: 360  # 6 minutes in seconds
