@@ -5,7 +5,7 @@ Proxmox Moving Castle (PMC) Controller
 
 This script implements a moving target defense system for Proxmox environments.
 It manages the creation, rotation, and monitoring of both production and decoy services
-using LXC containers and full VMs.
+using LXC containers and full VMs, with support for randomized multiple decoys.
 
 Usage: python pmc_controller.py [--help] [--pmc-config FILE] [--instances-config FILE]
 
@@ -41,6 +41,8 @@ class ProxmoxMovingCastle:
         self.decoy_services = self.instances_config['decoy_services']
         
         self.logger = self.setup_logging()
+        self.decoy_instances = self.initialize_decoy_instances()
+        self.last_adjust_time = time.time()
 
     def load_config(self, config_file):
         """
@@ -269,43 +271,82 @@ class ProxmoxMovingCastle:
         service['external_port'] = new_external_port
         self.logger.info(f"Rotated production service {service['name']} to new VMID {new_vmid} and port {new_external_port}")
 
-    def recycle_decoy_service(self, decoy):
+    def initialize_decoy_instances(self):
+        """Initialize decoy instances based on the configuration."""
+        decoy_instances = []
+        for decoy in self.decoy_services:
+            num_instances = random.randint(decoy['min_instances'], decoy['max_instances'])
+            for i in range(num_instances):
+                instance = decoy.copy()
+                instance['name'] = f"{decoy['name']}_{i}"
+                instance['port'] = random.randint(decoy['port_range']['start'], decoy['port_range']['end'])
+                instance['vmid'] = self.create_decoy_instance(instance)
+                decoy_instances.append(instance)
+        return decoy_instances
+
+    def create_decoy_instance(self, instance):
+        """Create a new decoy instance."""
+        if instance['type'] == 'lxc':
+            return self.create_lxc(instance['name'], instance['template'], instance['cpu'], instance['memory'])
+        else:
+            return self.create_vm(instance['name'], instance['template'], instance['cpu'], instance['memory'])
+
+    def recycle_decoy_service(self, instance):
         """
         Recycle a decoy service by creating a new instance and removing the old one.
 
         Args:
-            decoy (dict): Decoy service configuration dictionary.
+            instance (dict): Decoy instance configuration dictionary.
         """
-        self.delete_container(decoy['vmid']) if decoy['type'] == 'lxc' else self.delete_vm(decoy['vmid'])
+        self.delete_container(instance['vmid']) if instance['type'] == 'lxc' else self.delete_vm(instance['vmid'])
         
-        new_vmid = self.create_lxc(decoy['name'], decoy['template'], decoy['cpu'], decoy['memory']) if decoy['type'] == 'lxc' else self.create_vm(decoy['name'], decoy['template'], decoy['cpu'], decoy['memory'])
+        new_vmid = self.create_decoy_instance(instance)
         
         if new_vmid is None:
-            self.logger.error(f"Failed to create new instance for decoy {decoy['name']}")
+            self.logger.error(f"Failed to create new instance for decoy {instance['name']}")
             return
 
-        self.start_container(new_vmid) if decoy['type'] == 'lxc' else self.start_vm(new_vmid)
+        self.start_container(new_vmid) if instance['type'] == 'lxc' else self.start_vm(new_vmid)
         
-        decoy['vmid'] = new_vmid
-        decoy['last_check'] = time.time()
-        self.logger.info(f"Recycled decoy service {decoy['name']} to new VMID {new_vmid}")
+        instance['vmid'] = new_vmid
+        instance['port'] = random.randint(instance['port_range']['start'], instance['port_range']['end'])
+        instance['last_check'] = time.time()
+        self.logger.info(f"Recycled decoy service {instance['name']} to new VMID {new_vmid} and port {instance['port']}")
 
-    def monitor_decoy_logs(self, decoy):
+    def adjust_decoy_instances(self):
+        """Adjust the number of decoy instances for each decoy service."""
+        for decoy in self.decoy_services:
+            current_instances = [i for i in self.decoy_instances if i['name'].startswith(decoy['name'])]
+            desired_instances = random.randint(decoy['min_instances'], decoy['max_instances'])
+            
+            if len(current_instances) < desired_instances:
+                for _ in range(desired_instances - len(current_instances)):
+                    new_instance = decoy.copy()
+                    new_instance['name'] = f"{decoy['name']}_{len(current_instances)}"
+                    new_instance['port'] = random.randint(decoy['port_range']['start'], decoy['port_range']['end'])
+                    new_instance['vmid'] = self.create_decoy_instance(new_instance)
+                    self.decoy_instances.append(new_instance)
+            elif len(current_instances) > desired_instances:
+                for instance in current_instances[desired_instances:]:
+                    self.delete_container(instance['vmid']) if instance['type'] == 'lxc' else self.delete_vm(instance['vmid'])
+                    self.decoy_instances.remove(instance)
+
+    def monitor_decoy_logs(self, instance):
         """
         Monitor the logs of a decoy service for suspicious activity.
 
         Args:
-            decoy (dict): Decoy service configuration dictionary.
+            instance (dict): Decoy instance configuration dictionary.
         """
         try:
-            log_file = decoy['log_monitoring']['log_file']
-            success_pattern = decoy['log_monitoring']['success_pattern']
+            log_file = instance['log_monitoring']['log_file']
+            success_pattern = instance['log_monitoring']['success_pattern']
             
             ssh = paramiko.SSHClient()
             ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
-            ssh.connect(self.get_container_ip(decoy['vmid']) if decoy['type'] == 'lxc' else self.get_vm_ip(decoy['vmid']),
+            ssh.connect(self.get_container_ip(instance['vmid']) if instance['type'] == 'lxc' else self.get_vm_ip(instance['vmid']),
                         username='root',
-                        password=decoy['root_password'])
+                        password=instance['root_password'])
             
             _, stdout, _ = ssh.exec_command(f"tail -n 1000 {log_file}")
             log_content = stdout.read().decode('utf-8')
@@ -314,37 +355,41 @@ class ProxmoxMovingCastle:
             
             matches = re.finditer(success_pattern, log_content)
             for match in matches:
-                self.logger.warning(f"Suspicious activity detected on decoy {decoy['name']} (VMID: {decoy['vmid']})")
+                self.logger.warning(f"Suspicious activity detected on decoy {instance['name']} (VMID: {instance['vmid']})")
                 self.logger.warning(f"Matched log entry: {match.group(0)}")
             
-            decoy['last_check'] = time.time()
+            instance['last_check'] = time.time()
         except Exception as e:
-            self.logger.error(f"Error monitoring logs for decoy {decoy['name']}: {e}")
+            self.logger.error(f"Error monitoring logs for decoy {instance['name']}: {e}")
 
     def monitor_decoys(self):
-        """
-        Monitor all decoy services for suspicious activity.
-        """
-        for decoy in self.decoy_services:
-            if time.time() - decoy.get('last_check', 0) >= decoy['log_monitoring']['check_interval']:
-                self.monitor_decoy_logs(decoy)
+        """Monitor all decoy services for suspicious activity."""
+        for instance in self.decoy_instances:
+            if time.time() - instance.get('last_check', 0) >= instance['log_monitoring']['check_interval']:
+                self.monitor_decoy_logs(instance)
 
     def run(self):
-        """
-        Main execution loop for the ProxmoxMovingCastle controller.
-        """
+        """Main execution loop for the ProxmoxMovingCastle controller."""
         while True:
             try:
+                # Rotate production services
                 for service in self.production_services:
                     if time.time() - service.get('last_rotation', 0) >= self.pmc_config['rotation_interval']:
                         self.rotate_production_service(service)
                         service['last_rotation'] = time.time()
                 
-                for decoy in self.decoy_services:
-                    if time.time() - decoy.get('last_recycle', 0) >= self.pmc_config['recycle_interval']:
-                        self.recycle_decoy_service(decoy)
-                        decoy['last_recycle'] = time.time()
+                # Recycle decoy services
+                for instance in self.decoy_instances:
+                    if time.time() - instance.get('last_recycle', 0) >= self.pmc_config['recycle_interval']:
+                        self.recycle_decoy_service(instance)
+                        instance['last_recycle'] = time.time()
                 
+                # Adjust decoy instances
+                if time.time() - self.last_adjust_time >= self.pmc_config['adjust_interval']:
+                    self.adjust_decoy_instances()
+                    self.last_adjust_time = time.time()
+                
+                # Monitor decoys
                 self.monitor_decoys()
                 
                 time.sleep(60)  # Check every minute
@@ -368,9 +413,7 @@ def parse_arguments():
     return parser.parse_args()
 
 def main():
-    """
-    Main entry point for the Proxmox Moving Castle controller.
-    """
+    """Main entry point for the Proxmox Moving Castle controller."""
     args = parse_arguments()
     pmc = ProxmoxMovingCastle(args.pmc_config, args.instances_config)
     pmc.run()
