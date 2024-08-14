@@ -1,0 +1,65 @@
+production_services:
+  - name: 'gitlab'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 8192
+    internal_port: 80
+    root_password: 'strongGitLabPassword'
+
+  - name: 'jenkins'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 8192
+    internal_port: 8080
+    root_password: 'strongJenkinsPassword'
+
+  - name: 'docker_registry'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 5000
+    root_password: 'strongRegistryPassword'
+
+  - name: 'monitoring'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 3000
+    root_password: 'strongMonitoringPassword'
+
+decoy_services:
+  - name: 'decoy_gitlab'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 2048
+    min_instances: 1
+    max_instances: 3
+    port_range:
+      start: 10000
+      end: 10999
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/gitlab/gitlab-rails/auth.log'
+      success_pattern: 'Accepted login for'
+      check_interval: 300
+
+  - name: 'decoy_jenkins'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 2048
+    min_instances: 1
+    max_instances: 3
+    port_range:
+      start: 11000
+      end: 11999
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/jenkins/auth.log'
+      success_pattern: 'authenticated successfully'
+      check_interval: 240

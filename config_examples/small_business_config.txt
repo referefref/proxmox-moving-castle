@@ -1,0 +1,57 @@
+production_services:
+  - name: 'file_server'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 2
+    memory: 4096
+    internal_port: 445
+    root_password: 'strongFileServerPassword'
+
+  - name: 'voip_server'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 2
+    memory: 4096
+    internal_port: 5060
+    root_password: 'strongVoIPServerPassword'
+
+  - name: 'vpn_server'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    internal_port: 1194
+    root_password: 'strongVPNServerPassword'
+
+decoy_services:
+  - name: 'decoy_file_server'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 2
+    max_instances: 4
+    port_range:
+      start: 44500
+      end: 44599
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/samba/log.smbd'
+      success_pattern: 'authentication succeeded'
+      check_interval: 180
+
+  - name: 'decoy_voip'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 1
+    max_instances: 3
+    port_range:
+      start: 15060
+      end: 15099
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/asterisk/full'
+      success_pattern: 'successful auth'
+      check_interval: 120

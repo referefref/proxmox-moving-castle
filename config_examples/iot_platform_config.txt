@@ -1,0 +1,89 @@
+production_services:
+  - name: 'mqtt_broker'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 2048
+    internal_port: 1883
+    root_password: 'strongMQTTPassword'
+
+  - name: 'data_ingestor'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 8192
+    internal_port: 8080
+    root_password: 'strongIngestorPassword'
+
+  - name: 'timeseries_db'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 8
+    memory: 32768
+    internal_port: 8086
+    root_password: 'strongTimeSeriesDBPassword'
+
+  - name: 'analytics_engine'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 8
+    memory: 16384
+    internal_port: 5000
+    root_password: 'strongAnalyticsPassword'
+
+  - name: 'web_dashboard'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 80
+    root_password: 'strongDashboardPassword'
+
+decoy_services:
+  - name: 'decoy_mqtt'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 3
+    max_instances: 7
+    port_range:
+      start: 11883
+      end: 11999
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/mosquitto/mosquitto.log'
+      success_pattern: 'New client connected'
+      check_interval: 60
+
+  - name: 'decoy_api'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 2
+    max_instances: 5
+    port_range:
+      start: 18080
+      end: 18099
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/api_server.log'
+      success_pattern: 'Unauthorized API access attempt'
+      check_interval: 90
+
+  - name: 'decoy_dashboard'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 1
+    max_instances: 3
+    port_range:
+      start: 8000
+      end: 8099
+    root_password: 'weakDecoyPassword3'
+    log_monitoring:
+      log_file: '/var/log/nginx/access.log'
+      success_pattern: 'POST /login'
+      check_interval: 120

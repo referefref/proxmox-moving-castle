@@ -1,0 +1,65 @@
+production_services:
+  - name: 'webserver'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 8192
+    internal_port: 80
+    root_password: 'strongWebServerPassword'
+
+  - name: 'app_server'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 4
+    memory: 16384
+    internal_port: 8080
+    root_password: 'strongAppServerPassword'
+
+  - name: 'database'
+    type: 'vm'
+    template: 'local:iso/ubuntu-20.04-server-cloudimg-amd64.img'
+    cpu: 8
+    memory: 32768
+    internal_port: 3306
+    root_password: 'strongDatabasePassword'
+
+  - name: 'cache'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 2
+    memory: 4096
+    internal_port: 6379
+    root_password: 'strongCachePassword'
+
+decoy_services:
+  - name: 'decoy_admin_panel'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 2
+    max_instances: 4
+    port_range:
+      start: 8000
+      end: 8999
+    root_password: 'weakDecoyPassword1'
+    log_monitoring:
+      log_file: '/var/log/nginx/access.log'
+      success_pattern: 'POST /admin/login'
+      check_interval: 180
+
+  - name: 'decoy_api'
+    type: 'lxc'
+    template: 'local:vztmpl/ubuntu-20.04-standard_20.04-1_amd64.tar.gz'
+    cpu: 1
+    memory: 1024
+    min_instances: 3
+    max_instances: 6
+    port_range:
+      start: 9000
+      end: 9999
+    root_password: 'weakDecoyPassword2'
+    log_monitoring:
+      log_file: '/var/log/api_server.log'
+      success_pattern: 'Unauthorized access attempt'
+      check_interval: 120
